@@ -2,6 +2,9 @@
 
 var AWS = require('aws-sdk');
 
+var slack = require('./Slack');
+var airTable = require('./AirTable');
+
 console.log("AWS Lambda SES Forwarder // @arithmetric // Version 5.0.0");
 
 // Configure the S3 bucket and key prefix for stored raw emails, and the
@@ -36,25 +39,15 @@ console.log("AWS Lambda SES Forwarder // @arithmetric // Version 5.0.0");
 //
 //   To match all email addresses matching no other mapping, use "@" as a key.
 var defaultConfig = {
-  fromEmail: "noreply@example.com",
-  subjectPrefix: "",
-  emailBucket: "s3-bucket-name",
-  emailKeyPrefix: "emailsPrefix/",
-  allowPlusSign: true,
+  fromEmail: "outbound@forwarder.billhero.com.au",
+  subjectPrefix: "[Forwarded via Bill Hero] - ",
+  emailBucket: "billhero-email",
+  emailKeyPrefix: "inbound/",
+  allowPlusSign: false,
   forwardMapping: {
-    "info@example.com": [
-      "example.john@example.com",
-      "example.jen@example.com"
+    "@forwarder.billhero.com.au": [
+      // "richard+test-bh-inbound@foxworthy.name",
     ],
-    "abuse@example.com": [
-      "example.jim@example.com"
-    ],
-    "@example.com": [
-      "example.john@example.com"
-    ],
-    "info": [
-      "info@example.com"
-    ]
   }
 };
 
@@ -92,10 +85,13 @@ exports.parseEvent = function(data) {
  *
  * @return {object} - Promise resolved with data.
  */
-exports.transformRecipients = function(data) {
+exports.transformRecipients = async (data) => {
   var newRecipients = [];
   data.originalRecipients = data.recipients;
-  data.recipients.forEach(function(origEmail) {
+  for (var origEmail of data.recipients) {
+    // Momentum (and possibly others) require an email prefix of 'subscriber+'.
+    // We need to get rid of it.
+    origEmail.replace(/^subscriber\/+/, ''); 
     var origEmailKey = origEmail.toLowerCase();
     if (data.config.allowPlusSign) {
       origEmailKey = origEmailKey.replace(/\+.*?@/, '@');
@@ -107,17 +103,25 @@ exports.transformRecipients = function(data) {
     } else {
       var origEmailDomain;
       var origEmailUser;
+      var origEmailUserOrigCase;
       var pos = origEmailKey.lastIndexOf("@");
       if (pos === -1) {
         origEmailUser = origEmailKey;
       } else {
         origEmailDomain = origEmailKey.slice(pos);
         origEmailUser = origEmailKey.slice(0, pos);
+        origEmailUserOrigCase = origEmail.slice(0, pos);
       }
       if (origEmailDomain &&
-          data.config.forwardMapping.hasOwnProperty(origEmailDomain)) {
-        newRecipients = newRecipients.concat(
-          data.config.forwardMapping[origEmailDomain]);
+        data.config.forwardMapping.hasOwnProperty(origEmailDomain)) {
+        var found = await airTable.lookupUser(origEmailUserOrigCase);
+
+        if (found) {
+          /* newRecipients = newRecipients.concat(
+            data.config.forwardMapping[origEmailDomain]);
+          */
+          newRecipients = newRecipients.concat(found);
+        }
         data.originalRecipient = origEmail;
       } else if (origEmailUser &&
         data.config.forwardMapping.hasOwnProperty(origEmailUser)) {
@@ -130,7 +134,7 @@ exports.transformRecipients = function(data) {
         data.originalRecipient = origEmail;
       }
     }
-  });
+  };
 
   if (!newRecipients.length) {
     data.log({
@@ -293,12 +297,16 @@ exports.processMessage = function(data) {
  */
 exports.sendMessage = function(data) {
   var params = {
-    Destinations: data.recipients,
+    // Destinations: data.recipients,
+    To: data.recipients,
     Source: data.originalRecipient,
     RawMessage: {
       Data: data.emailData
     }
   };
+
+  if (process.env.BILLHERO_BCC) params.Bcc = process.env.BILLHERO_BCC;
+
   data.log({
     level: "info",
     message: "sendMessage: Sending email via SES. Original recipients: " +
@@ -383,3 +391,15 @@ Promise.series = function(promises, initValue) {
     return chain.then(promise);
   }, Promise.resolve(initValue));
 };
+
+/*
+var callback = function(err) {
+  console.log(err ? err : 'ouch');
+  //done(err ? null : true);
+};
+
+var event = JSON.parse(require("fs").readFileSync("test/assets/event.json"));
+
+exports.handler(event, {}, callback, null);
+
+*/

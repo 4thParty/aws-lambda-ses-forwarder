@@ -9,6 +9,8 @@
     "test": "nyc --statements 100 -- mocha -- --check-leaks --timeout 3000"
   },
   "dependencies": {
+    "@slack/webhook": "^5.0.3",
+    "airtable": "^0.10.0",
     "aws-sdk": "~2.631.0"
   },
   "devDependencies": {

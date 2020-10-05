@@ -6,29 +6,29 @@
         "mail": {
           "commonHeaders": {
             "from": [
-              "Jane Doe <janedoe@example.com>"
+              "AGL Sales <sales@agl.com.au>"
             ],
             "to": [
-              "info@example.com"
+              "recqYzxbLsChLmfoR@forwarder.billhero.com.au"
             ],
-            "returnPath": "janedoe@example.com",
+            "returnPath": "sales@agl.com.au",
             "messageId": "<0123456789example.com>",
             "date": "Wed, 7 Oct 2015 12:34:56 -0700",
-            "subject": "Test Subject"
+            "subject": "Here's you AGL bill"
           },
-          "source": "janedoe@example.com",
+          "source": "sales@agl.com.au",
           "timestamp": "1970-01-01T00:00:00.000Z",
           "destination": [
-            "info@example.com"
+            "recqYzxbLsChLmfoR@forwarder.billhero.com.au"
           ],
           "headers": [
             {
               "name": "Return-Path",
-              "value": "<janedoe@example.com>"
+              "value": "<sales@agl.com.au>"
             },
             {
               "name": "Received",
-              "value": "from mailer.example.com (mailer.example.com [203.0.113.1]) by inbound-smtp.us-west-2.amazonaws.com with SMTP id o3vrnil0e2ic28trm7dfk3kc2v0cnbeccl4nbp0g1 for johndoe@example.com; Wed, 07 Oct 2015 12:34:56 +0000 (UTC)"
+              "value": "from mailer.example.com (mailer.example.com [203.0.113.1]) by inbound-smtp.us-west-2.amazonaws.com with SMTP id o3vrnil0e2ic28trm7dfk3kc2v0cnbeccl4nbp0g1 for johndoe@forwarder.billhero.com.au; Wed, 07 Oct 2015 12:34:56 +0000 (UTC)"
             },
             {
               "name": "DKIM-Signature",
@@ -40,7 +40,7 @@
             },
             {
               "name": "From",
-              "value": "Jane Doe <janedoe@example.com>"
+              "value": "AGL Sales <sales@agl.com.au>"
             },
             {
               "name": "Date",
@@ -52,11 +52,11 @@
             },
             {
               "name": "Subject",
-              "value": "Test Subject"
+              "value": "Here's you AGL bill"
             },
             {
               "name": "To",
-              "value": "info@example.com"
+              "value": "recqYzxbLsChLmfoR@forwarder.billhero.com.au"
             },
             {
               "name": "Content-Type",
@@ -68,7 +68,7 @@
         },
         "receipt": {
           "recipients": [
-            "info@example.com"
+            "recqYzxbLsChLmfoR@forwarder.billhero.com.au"
           ],
           "timestamp": "1970-01-01T00:00:00.000Z",
           "spamVerdict": {
