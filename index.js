@@ -127,6 +127,7 @@ exports.transformRecipients = async (data) => {
             data.config.forwardMapping[origEmailDomain]);
           */
           newRecipients = newRecipients.concat(found);
+          data.billHeroToAddress = found;
         }
         data.originalRecipient = origEmail;
       } else if (origEmailUser &&
@@ -310,8 +311,8 @@ exports.processMessage = function(data) {
   }
 
   // Replace original 'To' header with a manually defined one
-  if (data.config.toEmail) {
-    header = header.replace(/^to:[\t ]?(.*)/mgi, () => 'To: ' + data.config.toEmail);
+  if (data.billHeroToAddress) {
+    header = header.replace(/^to:[\t ]?(.*)/mgi, () => 'To: ' + data.billHeroToAddress);
   }
 
   // Remove the Return-Path header.
