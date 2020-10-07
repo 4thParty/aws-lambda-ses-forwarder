@@ -7,13 +7,13 @@ module.exports = {
     lookupUser: async (bhid) => {
         return AirtableBase(process.env.AIRTABLE_USERS_TABLE).find(bhid)
             .then((record) => {
-                console.log(`AirTable lookup for ${bhid} found ${record.fields['Email']}`);
+                console.log(`AirTable lookup for '${bhid}' found ${record.fields['Email']}`);
                 return record.fields['Email'];
             })
             .catch(async (err) => {
-                var msg = `AirTable lookup for bhid ${bhid} failed: ${err}`;
+                var msg = `AirTable lookup for bhid '${bhid}' failed: ${err}`;
                 console.log(msg);
-                await Slack.sendMessage(msg, ':mag:');
+                if (process.env.AIRTABLE_ERRORS_SLACK_CHANNEL) await Slack.sendMessage(msg, ':mag:');
                 return;
             });
     }

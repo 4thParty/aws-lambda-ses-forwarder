@@ -7,7 +7,7 @@ const webhook = new IncomingWebhook(process.env.SLACK_WEBHOOK_URL);
 
 module.exports = {
     sendMessage: async (message, emoji) => {
-        await webhook.send({
+        if (process.env.SLACK_CHANNEL) await webhook.send({
             text: message,
             channel: process.env.SLACK_CHANNEL,
             as_user: false,

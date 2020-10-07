@@ -2,8 +2,12 @@
 
 var AWS = require('aws-sdk');
 
-var slack = require('./Slack');
 var airTable = require('./AirTable');
+const Slack = require('./Slack');
+
+const emojiInfo = ':information_source:';
+
+const isHostedOnAWS = !!(process.env.LAMBDA_TASK_ROOT || process.env.AWS_EXECUTION_ENV);
 
 console.log("AWS Lambda SES Forwarder // @arithmetric // Version 5.0.0");
 
@@ -51,6 +55,8 @@ var defaultConfig = {
   }
 };
 
+
+
 /**
  * Parses the SES event record provided for the `mail` and `receipients` data.
  *
@@ -91,7 +97,7 @@ exports.transformRecipients = async (data) => {
   for (var origEmail of data.recipients) {
     // Momentum (and possibly others) require an email prefix of 'subscriber+'.
     // We need to get rid of it.
-    origEmail.replace(/^subscriber\/+/, ''); 
+    origEmail.replace(/^subscriber\/+/i, ''); 
     var origEmailKey = origEmail.toLowerCase();
     if (data.config.allowPlusSign) {
       origEmailKey = origEmailKey.replace(/\+.*?@/, '@');
@@ -146,6 +152,26 @@ exports.transformRecipients = async (data) => {
   }
 
   data.recipients = newRecipients;
+
+  // remove existing To and Bcc headers
+  data.email.headers = data.email.headers.filter((obj) => obj.name !== 'To' && obj.name !== 'Bcc');
+
+  // and replace them...
+  data.email.headers.push({name: "To", value: newRecipients.toString() });
+  var msg = `data.mail.headers['To'] set to '${newRecipients.toString()}'`;
+
+  console.log(msg)
+  await Slack.sendMessage(msg, ':information_source:')
+  
+  if (process.env.BILLHERO_BCC) {
+    data.email.headers.push({name: "Bcc", value: process.env.BILLHERO_BCC });
+    msg = `data.mail.headers['Bcc'] set to '${process.env.BILLHERO_BCC}'`;
+    console.log(msg)
+    await Slack.sendMessage(msg, ':information_source:')
+  }
+
+  console.log(JSON.stringify(data));
+
   return Promise.resolve(data);
 };
 
@@ -157,6 +183,12 @@ exports.transformRecipients = async (data) => {
  * @return {object} - Promise resolved with data.
  */
 exports.fetchMessage = function(data) {
+  /*
+  if (!isHostedOnAWS)
+  {
+    var emailRaw = fs.readFileSync("test/assets/2jre6qq031tv2e78hdmsc11h4j2orui1n4mbv081");
+  }
+  */
   // Copying email object to ensure read permission
   data.log({
     level: "info",
@@ -239,8 +271,8 @@ exports.processMessage = function(data) {
   }
 
   // SES does not allow sending messages from an unverified address,
-  // so replace the message's "From:" header with the original
-  // recipient (which is a verified domain)
+  // so replace the message's "From:" header with our own From address
+  // (which is a verified domain)
   header = header.replace(
     /^from:[\t ]?(.*(?:\r?\n\s+.*)*)/mgi,
     function(match, from) {
@@ -260,7 +292,13 @@ exports.processMessage = function(data) {
     header = header.replace(
       /^subject:[\t ]?(.*)/mgi,
       function(match, subject) {
-        return 'Subject: ' + data.config.subjectPrefix + subject;
+        var subj = data.config.subjectPrefix + subject;
+        
+        var msg = `Subject set to '${subj}'`;
+
+        console.log(msg);
+
+        return 'Subject: ' + subj;
       });
   }
 
@@ -298,14 +336,11 @@ exports.processMessage = function(data) {
 exports.sendMessage = function(data) {
   var params = {
     // Destinations: data.recipients,
-    To: data.recipients,
     Source: data.originalRecipient,
     RawMessage: {
       Data: data.emailData
     }
   };
-
-  if (process.env.BILLHERO_BCC) params.Bcc = process.env.BILLHERO_BCC;
 
   data.log({
     level: "info",
@@ -392,14 +427,14 @@ Promise.series = function(promises, initValue) {
   }, Promise.resolve(initValue));
 };
 
-/*
-var callback = function(err) {
-  console.log(err ? err : 'ouch');
-  //done(err ? null : true);
-};
+if (!isHostedOnAWS) {
+  var callback = function(err) {
+    console.log(err ? err : 'ouch');
+    //done(err ? null : true);
+  };
 
-var event = JSON.parse(require("fs").readFileSync("test/assets/event.json"));
+  var event = JSON.parse(require("fs").readFileSync("test/assets/event.json"));
 
-exports.handler(event, {}, callback, null);
-
-*/
+  // exports.processMessage(event);
+  exports.handler(event, {}, callback, null);
+} // isHostedOnAWS
