@@ -153,6 +153,10 @@ exports.transformRecipients = async (data) => {
 
   data.recipients = newRecipients;
 
+  /*
+
+  // NOTE: this doesn't work - we just end up with mails looping round and around
+
   // remove existing To and Bcc headers
   data.email.headers = data.email.headers.filter((obj) => obj.name !== 'To' && obj.name !== 'Bcc');
 
@@ -171,6 +175,8 @@ exports.transformRecipients = async (data) => {
   }
 
   console.log(JSON.stringify(data));
+
+  */
 
   return Promise.resolve(data);
 };
@@ -256,6 +262,7 @@ exports.processMessage = function(data) {
     match = header.match(/^from:[\t ]?(.*(?:\r?\n\s+.*)*\r?\n)/mi);
     var from = match && match[1] ? match[1] : '';
     if (from) {
+      data.fromAddress = from; // add a custom field
       header = header + 'Reply-To: ' + from;
       data.log({
         level: "info",
@@ -335,19 +342,25 @@ exports.processMessage = function(data) {
  */
 exports.sendMessage = function(data) {
   var params = {
-    // Destinations: data.recipients,
+    Destinations: data.recipients,
     Source: data.originalRecipient,
     RawMessage: {
       Data: data.emailData
     }
   };
 
+  var originalRecipients = data.originalRecipients.join(", ");
+  var newRecipients = data.recipients.join(", ");
+
   data.log({
     level: "info",
     message: "sendMessage: Sending email via SES. Original recipients: " +
-      data.originalRecipients.join(", ") + ". Transformed recipients: " +
-      data.recipients.join(", ") + "."
+    originalRecipients + ". Transformed recipients: " +
+    newRecipients + "."
   });
+
+  await Slack.sendMessage(`Forwarding email from: ${data.fromAddress || '<not extracted>'}\nOriginal recipients: ${originalRecipients}\nNew recipients: ${newRecipients}`);
+
   return new Promise(function(resolve, reject) {
     data.ses.sendRawEmail(params, function(err, result) {
       if (err) {
