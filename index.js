@@ -340,7 +340,7 @@ exports.processMessage = function(data) {
  *
  * @return {object} - Promise resolved with data.
  */
-exports.sendMessage = function(data) {
+exports.sendMessage = async (data) => {
   var params = {
     Destinations: data.recipients,
     Source: data.originalRecipient,
@@ -355,14 +355,14 @@ exports.sendMessage = function(data) {
   data.log({
     level: "info",
     message: "sendMessage: Sending email via SES. Original recipients: " +
-    originalRecipients + ". Transformed recipients: " +
-    newRecipients + "."
+      originalRecipients + ". Transformed recipients: " +
+      newRecipients + "."
   });
 
   await Slack.sendMessage(`Forwarding email from: ${data.fromAddress || '<not extracted>'}\nOriginal recipients: ${originalRecipients}\nNew recipients: ${newRecipients}`);
 
-  return new Promise(function(resolve, reject) {
-    data.ses.sendRawEmail(params, function(err, result) {
+  return new Promise(function (resolve, reject) {
+    data.ses.sendRawEmail(params, function (err, result) {
       if (err) {
         data.log({
           level: "error",
