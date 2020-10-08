@@ -55,8 +55,6 @@ var defaultConfig = {
   }
 };
 
-
-
 /**
  * Parses the SES event record provided for the `mail` and `receipients` data.
  *
@@ -263,7 +261,7 @@ exports.processMessage = function(data) {
     match = header.match(/^from:[\t ]?(.*(?:\r?\n\s+.*)*\r?\n)/mi);
     var from = match && match[1] ? match[1] : '';
     if (from) {
-      data.fromAddress = from; // add a custom field
+      data.fromAddress = from.trim(); // add a custom field
       header = header + 'Reply-To: ' + from;
       data.log({
         level: "info",
@@ -315,6 +313,27 @@ exports.processMessage = function(data) {
     header = header.replace(/^to:[\t ]?(.*)/mgi, () => 'To: ' + data.billHeroToAddress);
   }
 
+  if (process.env.BILLHERO_BCC) {
+    var replaced;
+
+    header = header.replace(/^bcc:[\t ]?(.*)/mgi, () => {
+      replaced = true;
+      return 'Bcc: ' + process.env.BILLHERO_BCC;
+    });
+
+    // if there was no BCC in the first place then append one to the header
+    if (!replaced) {
+      var endsWithNewline = header.endsWith('\n');
+
+      header += `${endsWithNewline ? '' : '\n'}Bcc: ${process.env.BILLHERO_BCC}${endsWithNewline ? '\n' : ''}`;
+
+      data.extraInfo = data.extraInfo || [];
+
+      // add a note
+      data.extraInfo.push(`Added 'Bcc: ${process.env.BILLHERO_BCC}'`);
+    }
+  }
+
   // Remove the Return-Path header.
   header = header.replace(/^return-path:[\t ]?(.*)\r?\n/mgi, '');
 
@@ -351,16 +370,28 @@ exports.sendMessage = async (data) => {
   };
 
   var originalRecipients = data.originalRecipients.join(", ");
-  var newRecipients = data.recipients.join(", ");
 
   data.log({
     level: "info",
     message: "sendMessage: Sending email via SES. Original recipients: " +
       originalRecipients + ". Transformed recipients: " +
-      newRecipients + "."
+      data.recipients.join(", ") + "."
   });
 
-  await Slack.sendMessage(`Forwarding email from: ${data.fromAddress || '<not extracted>'}\nOriginal recipients: ${originalRecipients}\nNew recipients: ${newRecipients}`);
+  // obfuscate the transformed email addresses
+  var newRecipients = data.recipients.map(email => 
+    email.replace(/(?<=[\w]{1})[\w-\._\+%]*(?=[\w]{1}@)/, (s) => 
+      '*'.repeat(s.length)
+    )
+  ).join(', ');
+
+  var logMessage = `Forwarding email from: ${data.fromAddress || '<not extracted>'}\nOriginal recipients: ${originalRecipients}\nNew recipients: ${newRecipients}`;
+
+  if (data.extraInfo) {
+    logMessage += `\n${data.extraInfo.join(', ')}`;
+  }
+
+  await Slack.sendMessage(logMessage);
 
   return new Promise(function (resolve, reject) {
     data.ses.sendRawEmail(params, function (err, result) {
@@ -441,7 +472,55 @@ Promise.series = function(promises, initValue) {
   }, Promise.resolve(initValue));
 };
 
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+/********************************/
+
 if (!isHostedOnAWS) {
+
+  var header = 'name: value\nTo: gary@test.com\nSubject: blah\nBcc: bcc@bcc.com';
+
+  header = 'name: value\nTo: gary@test.com\nSubject: blah\n';
+
+  if (process.env.BILLHERO_BCC) {
+    var replaced;
+
+    header = header.replace(/^bcc:[\t ]?(.*)/mgi, () => {
+      replaced = true;
+      return 'Bcc: ' + process.env.BILLHERO_BCC;
+    });
+
+    if (!replaced) {
+      var endsWithNewline = header.endsWith('\n');
+
+      header += `${endsWithNewline ? '' : '\n'}Bcc: ${process.env.BILLHERO_BCC}${endsWithNewline ? '\n' : ''}`
+
+      var data = {};
+      data.extraInfo = data.extraInfo || [];
+      data.extraInfo.push(`Added 'Bcc: ${process.env.BILLHERO_BCC}'`);
+    }
+  }
+
+  var emails = ['gazzamate@hotmail.com', 'blahblah@blahblah.com'];
+
+  emails = emails.map(email => 
+    // obfuscate the transformed email addresses
+    email.replace(/(?<=[\w]{1})[\w-\._\+%]*(?=[\w]{1}@)/, (s) => 
+      '*'.repeat(s.length)
+    )
+  ).join(', ');
+
   var callback = function(err) {
     console.log(err ? err : 'ouch');
     //done(err ? null : true);
