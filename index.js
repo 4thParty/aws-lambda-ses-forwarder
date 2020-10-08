@@ -451,7 +451,7 @@ exports.sendMessage = async (data) => {
 
         data.log({
           level: "info",
-          message: `Original message written to ${outboundEmailKeyPrefix}`,
+          message: `Original message written to ${data.config.outboundEmailKeyPrefix}`,
           result: result
         });
 
@@ -473,7 +473,7 @@ exports.sendMessage = async (data) => {
 
           data.log({
             level: "info",
-            message: `Original message removed from ${inboundEmailKeyPrefix}`,
+            message: `Original message removed from ${data.config.inboundEmailKeyPrefix}`,
             result: result
           });
     
