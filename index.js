@@ -476,12 +476,11 @@ exports.sendMessage = async (data) => {
             message: `Original message removed from ${data.config.inboundEmailKeyPrefix}`,
             result: result
           });
-    
-        })
-      });
 
-      resolve(data);
-    });
+          resolve(data);
+        }); // deleteObject
+      }); // putObject
+    }); // sendRawEmail
   });
 };
 
