@@ -64,6 +64,8 @@ var defaultConfig = {
  * @return {object} - Promise resolved with data.
  */
 exports.parseEvent = function(data) {
+  if (data.abortReason) return Promise.resolve(data);
+
   // Validate characteristics of a SES event record.
   if (!data.event ||
       !data.event.hasOwnProperty('Records') ||
@@ -91,6 +93,8 @@ exports.parseEvent = function(data) {
  * @return {object} - Promise resolved with data.
  */
 exports.transformRecipients = async (data) => {
+  if (data.abortReason) return Promise.resolve(data);
+
   var newRecipients = [];
   data.originalRecipients = data.recipients;
   for (var origEmail of data.recipients) {
@@ -189,6 +193,7 @@ exports.transformRecipients = async (data) => {
  * @return {object} - Promise resolved with data.
  */
 exports.fetchMessage = function(data) {
+  if (data.abortReason) return Promise.resolve(data);
   /*
   if (!isHostedOnAWS)
   {
@@ -253,6 +258,8 @@ exports.fetchMessage = function(data) {
  * @return {object} - Promise resolved with data.
  */
 exports.processMessage = function(data) {
+  if (data.abortReason) return Promise.resolve(data);
+
   var match = data.emailData.match(/^((?:.+\r?\n)*)(\r?\n(?:.*\s+)*)/m);
   var header = match && match[1] ? match[1] : data.emailData;
   var body = match && match[2] ? match[2] : '';
@@ -299,6 +306,12 @@ exports.processMessage = function(data) {
     header = header.replace(
       /^subject:[\t ]?(.*)/mgi,
       function(match, subject) {
+
+        if (process.env.DETECT_LOOP && subject.includes(data.config.subjectPrefix)) {
+          data.abortReason = `Possible email loop detected - incoming email Subject already contains '${data.config.subjectPrefix}'`;
+          return;
+        }
+
         var subj = data.config.subjectPrefix + subject;
         
         var msg = `Subject set to '${subj}'`;
@@ -362,8 +375,16 @@ exports.processMessage = function(data) {
  * @return {object} - Promise resolved with data.
  */
 exports.sendMessage = async (data) => {
+  if (data.abortReason) {
+    var msg = `Processing of message <s3://${data.config.emailBucket}/${data.config.inboundEmailKeyPrefix}${data.email.messageId}|${data.email.messageId}> aborted: ${data.abortReason}`;
+    console.log(msg);
+    await this.sendMessage(msg);
+    return Promise.reject('Error: ' + data.abortReason);
+  }
+
   var params = {
-    Destinations: data.recipients,
+    // We don't send Destinations because we've manually set our To and Bcc addresses
+    // Destinations: data.recipients,
     Source: data.originalRecipient,
     RawMessage: {
       Data: data.emailData
@@ -394,24 +415,6 @@ exports.sendMessage = async (data) => {
 
   await Slack.sendMessage(logMessage);
 
-  // Save the raw email to S3
-  data.s3.putObject({
-    Bucket: data.config.emailBucket,
-    Body:  data.emailData,
-    Key: data.config.outboundEmailKeyPrefix + data.email.messageId + '.txt' // to make life easier
-  }, function(err, result) {
-    if (err) {
-      data.log({
-        level: "error",
-        message: "putObject() returned error:",
-        error: err,
-        stack: err.stack
-      });
-      return reject(
-        new Error("Error: Failed to save outbound message body to S3."));
-    }
-});
-
   return new Promise(function (resolve, reject) {
     data.ses.sendRawEmail(params, function (err, result) {
       if (err) {
@@ -428,6 +431,55 @@ exports.sendMessage = async (data) => {
         message: "sendRawEmail() successful.",
         result: result
       });
+
+      // Save the raw email to S3
+      data.s3.putObject({
+        Bucket: data.config.emailBucket,
+        Body:  data.emailData,
+        Key: data.config.outboundEmailKeyPrefix + data.email.messageId + '.txt' // to make life easier
+      }, function(err, result) {
+        if (err) {
+          data.log({
+            level: "error",
+            message: "putObject() returned error:",
+            error: err,
+            stack: err.stack
+          });
+          return reject(
+            new Error("Error: Failed to save outbound message body to S3."));
+        }
+
+        data.log({
+          level: "info",
+          message: `Original message written to ${outboundEmailKeyPrefix}`,
+          result: result
+        });
+
+        // delete the original item
+        data.s3.deleteObject({    
+          Bucket: data.config.emailBucket,
+          Key: data.config.inboundEmailKeyPrefix + data.email.messageId
+        }, function(err, result) {
+          if (err) {
+            data.log({
+              level: "error",
+              message: "deleteObject() returned error:",
+              error: err,
+              stack: err.stack
+            });
+            return reject(
+              new Error("Error: Failed to delete original message from S3."));
+          }
+
+          data.log({
+            level: "info",
+            message: `Original message removed from ${inboundEmailKeyPrefix}`,
+            result: result
+          });
+    
+        })
+      });
+
       resolve(data);
     });
   });
@@ -508,6 +560,11 @@ Promise.series = function(promises, initValue) {
 
 if (!isHostedOnAWS) {
 
+  var msg = `Processing of email <s3://${'bucket'}/${'prefix'}${'blah'}|${'bleh'}> aborted: ${'oops'}`;
+    console.log(msg);
+    (async () => await this.sendMessage(msg));
+  
+  
   var header = 'name: value\nTo: gary@test.com\nSubject: blah\nBcc: bcc@bcc.com';
 
   header = 'name: value\nTo: gary@test.com\nSubject: blah\n';
