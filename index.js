@@ -22,7 +22,7 @@ console.log("AWS Lambda SES Forwarder // @arithmetric // Version 5.0.0");
 //
 // - emailBucket: S3 bucket name where SES stores emails.
 //
-// - emailKeyPrefix: S3 key name prefix where SES stores email. Include the
+// - inboundEmailKeyPrefix: S3 key name prefix where SES stores email. Include the
 //   trailing slash.
 //
 // - allowPlusSign: Enables support for plus sign suffixes on email addresses.
@@ -46,7 +46,8 @@ var defaultConfig = {
   fromEmail: "outbound@forwarder.billhero.com.au",
   subjectPrefix: "[Forwarded via Bill Hero] - ",
   emailBucket: "billhero-email",
-  emailKeyPrefix: "inbound/",
+  inboundEmailKeyPrefix: "inbound/",
+  outboundEmailKeyPrefix: "outbound/",
   allowPlusSign: false,
   forwardMapping: {
     "@forwarder.billhero.com.au": [
@@ -198,14 +199,14 @@ exports.fetchMessage = function(data) {
   data.log({
     level: "info",
     message: "Fetching email at s3://" + data.config.emailBucket + '/' +
-      data.config.emailKeyPrefix + data.email.messageId
+      data.config.inboundEmailKeyPrefix + data.email.messageId
   });
   return new Promise(function(resolve, reject) {
     data.s3.copyObject({
       Bucket: data.config.emailBucket,
-      CopySource: data.config.emailBucket + '/' + data.config.emailKeyPrefix +
+      CopySource: data.config.emailBucket + '/' + data.config.inboundEmailKeyPrefix +
         data.email.messageId,
-      Key: data.config.emailKeyPrefix + data.email.messageId,
+      Key: data.config.inboundEmailKeyPrefix + data.email.messageId,
       ACL: 'private',
       ContentType: 'text/plain',
       StorageClass: 'STANDARD'
@@ -224,7 +225,7 @@ exports.fetchMessage = function(data) {
       // Load the raw email from S3
       data.s3.getObject({
         Bucket: data.config.emailBucket,
-        Key: data.config.emailKeyPrefix + data.email.messageId
+        Key: data.config.inboundEmailKeyPrefix + data.email.messageId
       }, function(err, result) {
         if (err) {
           data.log({
@@ -392,6 +393,24 @@ exports.sendMessage = async (data) => {
   }
 
   await Slack.sendMessage(logMessage);
+
+  // Save the raw email to S3
+  data.s3.putObject({
+    Bucket: data.config.emailBucket,
+    Body:  data.emailData,
+    Key: data.config.outboundEmailKeyPrefix + data.email.messageId + '.txt' // to make life easier
+  }, function(err, result) {
+    if (err) {
+      data.log({
+        level: "error",
+        message: "putObject() returned error:",
+        error: err,
+        stack: err.stack
+      });
+      return reject(
+        new Error("Error: Failed to save outbound message body to S3."));
+    }
+});
 
   return new Promise(function (resolve, reject) {
     data.ses.sendRawEmail(params, function (err, result) {
