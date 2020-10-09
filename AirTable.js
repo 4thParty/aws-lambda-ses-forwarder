@@ -5,16 +5,36 @@ const AirtableBase = new Airtable({apiKey: process.env.AIRTABLE_API_KEY}).base(p
 
 module.exports = {
     lookupUser: async (bhid) => {
-        return AirtableBase(process.env.AIRTABLE_USERS_TABLE).find(bhid)
-            .then((record) => {
-                console.log(`AirTable lookup for '${bhid}' found ${record.fields['Email']}`);
-                return record.fields['Email'];
-            })
-            .catch(async (err) => {
-                var msg = `AirTable lookup for bhid '${bhid}' failed: ${err}`;
+        return AirtableBase(process.env.AIRTABLE_USERS_TABLE).select(
+            { filterByFormula: `LOWER(bhid)="${bhid.toLowerCase()}"` }
+        )
+        .all()
+        .then((recs) => {
+            if (!recs || !recs.length) {
+                var msg = `AirTable lookup for bhid '${bhid}' found 0 records`;
                 console.log(msg);
-                if (process.env.AIRTABLE_ERRORS_SLACK_CHANNEL) await Slack.sendMessage(msg, ':mag:');
+                if (process.env.SLACK_CHANNEL) {
+                    return Slack.sendMessage(msg, ':mag:')
+                }
                 return;
-            });
+            }
+
+            var email = recs[0].fields["Email"];
+            console.log(`AirTable lookup for '${bhid}' found ${email}`);
+            
+            return email;
+        })
+        .catch((err) => {
+            var msg = `AirTable lookup for bhid '${bhid}' failed: ${err}`;
+            console.log(msg);
+            
+            if (process.env.SLACK_CHANNEL) {
+                return Slack.sendMessage(msg, ':mag:')
+            }
+            
+            return;
+        })
     }
+
 };
+
