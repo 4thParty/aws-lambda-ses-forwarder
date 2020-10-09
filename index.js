@@ -454,9 +454,10 @@ exports.sendMessage = async (data) => {
           message: `Original message written to ${data.config.outboundEmailKeyPrefix}`,
           result: result
         });
-
+        
+/*
         // delete the original item
-        data.s3.deleteObject({    
+        data.s3.deleteObject({
           Bucket: data.config.emailBucket,
           Key: data.config.inboundEmailKeyPrefix + data.email.messageId
         }, function(err, result) {
@@ -477,8 +478,10 @@ exports.sendMessage = async (data) => {
             result: result
           });
 
-          resolve(data);
         }); // deleteObject
+
+*/        
+      resolve(data);
       }); // putObject
     }); // sendRawEmail
   });
@@ -513,6 +516,11 @@ exports.handler = function(event, context, callback, overrides) {
     s3: overrides && overrides.s3 ?
       overrides.s3 : new AWS.S3({signatureVersion: 'v4'})
   };
+
+  if (process.env.LAMBDA_FLAGS_LOG_EMAIL == 'true') {
+    console.log(data.event.Records[0].ses.mail);
+  }
+
   Promise.series(steps, data)
     .then(function(data) {
       data.log({
@@ -559,6 +567,34 @@ Promise.series = function(promises, initValue) {
 
 if (!isHostedOnAWS) {
 
+  /*
+  var v1 = !!JSON.parse((process.env.LAMBDA_FLAGS_LOG_EVENT || 'false').toLowerCase())
+  var v2 = !!JSON.parse(process.env.LAMBDA_FLAGS_LOG_EVENT2)
+  var v3 = !!JSON.parse(process.env.LAMBDA_FLAGS_LOG_EVENT3 || 'false')
+*/
+  if (process.env.LAMBDA_FLAGS && process.env.LAMBDA_FLAGS.logEvent === true) {
+    console.log(`event = ${event}`);
+  }
+
+  // var v3 = !!JSON.parse(process.env.LAMBDA_FLAGS_LOG_EVENT3)
+
+
+  var callback = function(obj) {
+    console.log(obj);
+  };
+
+  console.log(exports);
+
+
+  exports.handler(
+    event, 
+    {}, // lambda context
+    callback, // lanbda callback
+    null // overrrides
+    );
+
+  // gary's sandbox
+
   var msg = `Processing of email <s3://${'bucket'}/${'prefix'}${'blah'}|${'bleh'}> aborted: ${'oops'}`;
     console.log(msg);
     (async () => await this.sendMessage(msg));
@@ -595,11 +631,6 @@ if (!isHostedOnAWS) {
       '*'.repeat(s.length)
     )
   ).join(', ');
-
-  var callback = function(err) {
-    console.log(err ? err : 'ouch');
-    //done(err ? null : true);
-  };
 
   var event = JSON.parse(require("fs").readFileSync("test/assets/event.json"));
 
