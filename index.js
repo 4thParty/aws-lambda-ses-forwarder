@@ -147,12 +147,13 @@ exports.transformRecipients = async (data) => {
   };
 
   if (!newRecipients.length) {
+    var msg = "Finishing process. No new recipients found for original destinations: " + data.originalRecipients.join(", ");
+
     data.log({
-      message: "Finishing process. No new recipients found for " +
-        "original destinations: " + data.originalRecipients.join(", "),
+      message: msg,
       level: "info"
     });
-    return data.callback();
+    return Promise.reject(new Error(msg));
   }
 
   data.recipients = newRecipients;
@@ -363,6 +364,22 @@ exports.processMessage = function(data) {
   // header was modified.
   header = header.replace(/^dkim-signature:[\t ]?.*\r?\n(\s+.*\r?\n)*/mgi, '');
 
+  // deal with duplicate Mime-Version: headers
+  var first = true;
+
+  header = header.replace(/^mime-version:[\t ]?(.*)\r?\n/mgi, (match) => {
+
+    // we keep the first instance, and get rid of any subsequent ones
+    if (first) {
+      first = false;
+      return match;
+    }
+
+    console.log("Removed duplicate 'MIME-Version:' from header");
+
+    return '';
+  })
+
   data.emailData = header + body;
   return Promise.resolve(data);
 };
@@ -530,13 +547,14 @@ exports.handler = function(event, context, callback, overrides) {
       return data.callback();
     })
     .catch(function(err) {
+      var msg = "Step returned error: " + err.message;
       data.log({
         level: "error",
-        message: "Step returned error: " + err.message,
+        message: msg,
         error: err,
         stack: err.stack
       });
-      return data.callback(new Error("Error: Step returned error."));
+      return data.callback(new Error(msg));
     });
 };
 
@@ -565,41 +583,50 @@ Promise.series = function(promises, initValue) {
 /********************************/
 /********************************/
 
+  // gary's sandbox
 if (!isHostedOnAWS) {
 
+  /*
+  airTable.lookupUser('recxif5eaxTDpt6hcw').then(blah =>
+    {
+      console.log(blah);
+    })
+    */
   /*
   var v1 = !!JSON.parse((process.env.LAMBDA_FLAGS_LOG_EVENT || 'false').toLowerCase())
   var v2 = !!JSON.parse(process.env.LAMBDA_FLAGS_LOG_EVENT2)
   var v3 = !!JSON.parse(process.env.LAMBDA_FLAGS_LOG_EVENT3 || 'false')
 */
+
+/*
   if (process.env.LAMBDA_FLAGS && process.env.LAMBDA_FLAGS.logEvent === true) {
     console.log(`event = ${event}`);
   }
-
+*/
   // var v3 = !!JSON.parse(process.env.LAMBDA_FLAGS_LOG_EVENT3)
 
-
+/*
   var callback = function(obj) {
     console.log(obj);
   };
 
   console.log(exports);
+*/
 
-
+/*
   exports.handler(
     event, 
     {}, // lambda context
     callback, // lanbda callback
     null // overrrides
     );
-
-  // gary's sandbox
-
+*/
+  /*
   var msg = `Processing of email <s3://${'bucket'}/${'prefix'}${'blah'}|${'bleh'}> aborted: ${'oops'}`;
     console.log(msg);
     (async () => await this.sendMessage(msg));
   
-  
+  /*
   var header = 'name: value\nTo: gary@test.com\nSubject: blah\nBcc: bcc@bcc.com';
 
   header = 'name: value\nTo: gary@test.com\nSubject: blah\n';
@@ -622,7 +649,9 @@ if (!isHostedOnAWS) {
       data.extraInfo.push(`Added 'Bcc: ${process.env.BILLHERO_BCC}'`);
     }
   }
-
+  */
+  // test obfuscation
+  /*
   var emails = ['gazzamate@hotmail.com', 'blahblah@blahblah.com'];
 
   emails = emails.map(email => 
@@ -631,9 +660,24 @@ if (!isHostedOnAWS) {
       '*'.repeat(s.length)
     )
   ).join(', ');
+  */
 
-  var event = JSON.parse(require("fs").readFileSync("test/assets/event.json"));
-
+  // var event = JSON.parse(require("fs").readFileSync("test/assets/event.json"));
   // exports.processMessage(event);
-  exports.handler(event, {}, callback, null);
+  // exports.handler(event, {}, callback, null);
+  var fs = require("fs");
+
+  var body = fs.readFileSync("example/g0l49e0fl79c1b8kl61hmndm5v78ea2etavio4g1.txt").toString();
+  exports.processMessage({ 
+    emailData: body, 
+    log: console.log,
+    config: defaultConfig
+  }).then((blah) =>
+  {
+    console.log(blah);
+  })
+
+
+
+
 } // isHostedOnAWS
