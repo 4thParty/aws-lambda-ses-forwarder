@@ -270,7 +270,6 @@ exports.processMessage = function(data) {
     match = header.match(/^from:[\t ]?(.*(?:\r?\n\s+.*)*\r?\n)/mi);
     var from = match && match[1] ? match[1] : '';
     if (from) {
-      data.fromAddress = from.trim(); // add a custom field
       header = header + 'Reply-To: ' + from;
       data.log({
         level: "info",
@@ -292,6 +291,7 @@ exports.processMessage = function(data) {
     /^from:[\t ]?(.*(?:\r?\n\s+.*)*)/mgi,
     function(match, from) {
       var fromText;
+      data.fromAddress = from;
       if (data.config.fromEmail) {
         fromText = 'From: ' + from.replace(/<(.*)>/, '').trim() +
         ' <' + data.config.fromEmail + '>';
@@ -667,7 +667,7 @@ if (!isHostedOnAWS) {
   // exports.handler(event, {}, callback, null);
   var fs = require("fs");
 
-  var body = fs.readFileSync("example/g0l49e0fl79c1b8kl61hmndm5v78ea2etavio4g1.txt").toString();
+  var body = fs.readFileSync("example/7mfqiaffh51167ap44rmaohhf6cd2uni16h323o1").toString();
   exports.processMessage({ 
     emailData: body, 
     log: console.log,
