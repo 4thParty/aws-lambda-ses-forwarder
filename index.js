@@ -147,41 +147,11 @@ exports.transformRecipients = async (data) => {
   };
 
   if (!newRecipients.length) {
-    var msg = "Finishing process. No new recipients found for original destinations: " + data.originalRecipients.join(", ");
-
-    data.log({
-      message: msg,
-      level: "info"
-    });
-    return Promise.reject(new Error(msg));
+    data.abortReason =  "Finishing process. No new recipients found for original destinations: " + data.originalRecipients.join(", ");
+    return Promise.resolve(data);
   }
 
   data.recipients = newRecipients;
-
-  /*
-
-  // NOTE: this doesn't work - we just end up with mails looping round and around
-
-  // remove existing To and Bcc headers
-  data.email.headers = data.email.headers.filter((obj) => obj.name !== 'To' && obj.name !== 'Bcc');
-
-  // and replace them...
-  data.email.headers.push({name: "To", value: newRecipients.toString() });
-  var msg = `data.mail.headers['To'] set to '${newRecipients.toString()}'`;
-
-  console.log(msg)
-  await Slack.sendMessage(msg, ':information_source:')
-  
-  if (process.env.BILLHERO_BCC) {
-    data.email.headers.push({name: "Bcc", value: process.env.BILLHERO_BCC });
-    msg = `data.mail.headers['Bcc'] set to '${process.env.BILLHERO_BCC}'`;
-    console.log(msg)
-    await Slack.sendMessage(msg, ':information_source:')
-  }
-
-  console.log(JSON.stringify(data));
-
-  */
 
   return Promise.resolve(data);
 };
@@ -309,6 +279,8 @@ exports.processMessage = function(data) {
       function(match, subject) {
 
         if (process.env.DETECT_LOOP && subject.includes(data.config.subjectPrefix)) {
+
+          // this will be picked up later
           data.abortReason = `Possible email loop detected - incoming email Subject already contains '${data.config.subjectPrefix}'`;
           return;
         }
@@ -392,13 +364,16 @@ exports.processMessage = function(data) {
  * @return {object} - Promise resolved with data.
  */
 exports.sendMessage = async (data) => {
+  if (data.abortReason) return Promise.resolve(data);
+
+/*
   if (data.abortReason) {
     var msg = `Processing of message <s3://${data.config.emailBucket}/${data.config.inboundEmailKeyPrefix}${data.email.messageId}|${data.email.messageId}> aborted: ${data.abortReason}`;
     console.log(msg);
     await this.sendMessage(msg);
-    return Promise.reject('Error: ' + data.abortReason);
+    return resolve(data); // we don't want the lambda to retry
   }
-
+*/
   var params = {
     // We don't send Destinations because we've manually set our To and Bcc addresses
     // Destinations: data.recipients,
@@ -535,14 +510,14 @@ exports.handler = function(event, context, callback, overrides) {
   };
 
   if (process.env.LAMBDA_FLAGS_LOG_EMAIL == 'true') {
-    console.log(data.event.Records[0].ses.mail);
+    console.log(data.event.Records[0]);
   }
 
   Promise.series(steps, data)
     .then(function(data) {
       data.log({
         level: "info",
-        message: "Process finished successfully."
+        message: data.abortReason || "Process finished successfully."
       });
       return data.callback();
     })
@@ -667,16 +642,17 @@ if (!isHostedOnAWS) {
   // exports.handler(event, {}, callback, null);
   var fs = require("fs");
 
-  var body = fs.readFileSync("example/7mfqiaffh51167ap44rmaohhf6cd2uni16h323o1").toString();
-  exports.processMessage({ 
-    emailData: body, 
+  var raw = fs.readFileSync("example/u3tfss2q42tevbb0dkhar0joeqbtst54na21ea81").toString();
+  var parsed = fs.readFileSync("example/u3tfss2q42tevbb0dkhar0joeqbtst54na21ea81.txt").toString();
+  var data = { 
+    emailData: raw, 
     log: console.log,
     config: defaultConfig
-  }).then((blah) =>
-  {
-    console.log(blah);
-  })
+  };
 
+  data.recipients = data.event.Records[0].ses.receipt.recipients
+  // exports.processMessage(data).then((blah) => console.log(blah) )
+  exports.transformRecipients(data).then((blah) => console.log(blah) )
 
 
 
