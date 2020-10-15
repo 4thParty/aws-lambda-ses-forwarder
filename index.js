@@ -316,9 +316,8 @@ exports.processMessage = function(data) {
 
     // if there was no BCC in the first place then append one to the header
     if (!replaced) {
-      var endsWithNewline = header.endsWith('\n');
 
-      header += `${endsWithNewline ? '' : '\n'}Bcc: ${process.env.BILLHERO_BCC}${endsWithNewline ? '\n' : ''}`;
+      header = header.appendMailHeader('Bcc', process.env.BILLHERO_BCC);
 
       data.extraInfo = data.extraInfo || [];
 
@@ -326,6 +325,8 @@ exports.processMessage = function(data) {
       data.extraInfo.push(`Added 'Bcc: ${process.env.BILLHERO_BCC}'`);
     }
   }
+
+  header = header.appendMailHeader('X-SES-CONFIGURATION-SET', 'billhero');
 
   // Remove the Return-Path header.
   header = header.replace(/^return-path:[\t ]?(.*)\r?\n/mgi, '');
@@ -609,6 +610,13 @@ var copyToOutbound = function(data, moveFile = false) {
   })
 }
 
+if (!String.prototype.appendMailHeader) {
+  String.prototype.appendMailHeader = function(name, value) {
+    var endsWithNewline = this.endsWith('\n');
+
+    return this + `${endsWithNewline ? '' : '\n'}${name}: ${value}${endsWithNewline ? '\n' : ''}`;
+  };
+}
 
 /********************************/
 /********************************/
@@ -707,6 +715,14 @@ if (!isHostedOnAWS) {
   // var event = JSON.parse(require("fs").readFileSync("test/assets/event.json"));
   // exports.processMessage(event);
   // exports.handler(event, {}, callback, null);
+
+  var header1 = "hello\nworld";
+  var header2 = "hello\nworld\n";
+
+  header2 = header2.appendMailHeader('Bcc', process.env.BILLHERO_BCC);
+
+  var res1 = header1.appendMailHeader('name', 'val');
+  var res2 = header2.appendMailHeader('name', 'val');
 
   var r1 = "subscriber+hello@gmail.com".replace(/subscriber(\+|%2b)/mgi, '');
   var r2 = "subscriber%2bhello@gmail.com".replace(/subscriber(\+|%2b)/mgi, '');
