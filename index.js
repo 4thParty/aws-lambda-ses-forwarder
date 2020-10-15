@@ -288,7 +288,7 @@ exports.processMessage = function(data) {
 
         if (data.config.abortSubject && subject.match(data.config.abortSubject)) {
             data.abortReason = 'Processing aborted due to email subject';
-          return;
+            return;
         }
 
         var subj = data.config.subjectPrefix + subject;
@@ -432,6 +432,8 @@ exports.sendMessage = async (data) => {
         result: result
       });
 
+      // return copyToOutbound(data);
+
       // Save the raw email to S3
       data.s3.putObject({
         Bucket: data.config.emailBucket,
@@ -552,6 +554,62 @@ Promise.series = function(promises, initValue) {
   }, Promise.resolve(initValue));
 };
 
+var copyToOutbound = function(data, moveFile = false) {
+  // Save the raw email to S3
+  data.s3.putObject({
+    Bucket: data.config.emailBucket,
+    Body:  data.emailData,
+    Key: data.config.outboundEmailKeyPrefix + data.email.messageId + '.txt' // to make life easier
+  }, function(err, result) {
+    if (err) {
+      data.log({
+        level: "error",
+        message: "Error: Failed to save outbound message body to S3.",
+        error: err,
+        stack: err.stack
+      });
+      
+      return resolve(data);
+      
+      // return reject(new Error("Error: Failed to delete original message from S3."));
+    }
+
+    data.log({
+      level: "info",
+      message: `Original message written to ${data.config.outboundEmailKeyPrefix}`,
+      result: result
+    });
+    
+    if (moveFile) {
+      // delete the original item
+      data.s3.deleteObject({
+        Bucket: data.config.emailBucket,
+        Key: data.config.inboundEmailKeyPrefix + data.email.messageId
+      }, function(err, result) {
+        if (err) {
+          data.log({
+            level: "error",
+            message: "Error: Failed to delete original message from S3.",
+            error: err,
+            stack: err.stack
+          });
+          return resolve(data);
+          
+          // return reject(new Error("Error: Failed to delete original message from S3."));
+        }
+
+        data.log({
+          level: "info",
+          message: `Original message removed from ${data.config.inboundEmailKeyPrefix}`,
+          result: result
+        });
+      }); // deleteObject
+    }
+    return resolve(data);
+  })
+}
+
+
 /********************************/
 /********************************/
 /********************************/
@@ -649,16 +707,34 @@ if (!isHostedOnAWS) {
   // var event = JSON.parse(require("fs").readFileSync("test/assets/event.json"));
   // exports.processMessage(event);
   // exports.handler(event, {}, callback, null);
+
+  var r1 = "subscriber+hello@gmail.com".replace(/subscriber(\+|%2b)/mgi, '');
+  var r2 = "subscriber%2bhello@gmail.com".replace(/subscriber(\+|%2b)/mgi, '');
+  
   var fs = require("fs");
 
-  var raw = fs.readFileSync("example/u3tfss2q42tevbb0dkhar0joeqbtst54na21ea81").toString();
+  var subject = 'hello Delivery Status Notification (Failure) world';
+  var r = subject.match(defaultConfig.abortSubject);
+  subject = 'Delivery Status Notification (Failure)';
+  r = subject.match(defaultConfig.abortSubject);
+
+  if (defaultConfig.abortSubject && subject.match(defaultConfig.abortSubject)) {
+    console.log('Processing aborted due to email subject');
+    return;
+}
+
+var raw = fs.readFileSync("example/u3tfss2q42tevbb0dkhar0joeqbtst54na21ea81").toString();
   var parsed = fs.readFileSync("example/u3tfss2q42tevbb0dkhar0joeqbtst54na21ea81.txt").toString();
+
+  var n;
+  var v = 'hello' + (n || '');
   var data = { 
     emailData: raw, 
     log: console.log,
     config: defaultConfig
   };
-
+  console.dir(data);
+  console.log(data);
   data.recipients = data.event.Records[0].ses.receipt.recipients
   // exports.processMessage(data).then((blah) => console.log(blah) )
   exports.transformRecipients(data).then((blah) => console.log(blah) )
