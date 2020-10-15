@@ -49,6 +49,7 @@ var defaultConfig = {
   inboundEmailKeyPrefix: "inbound/",
   outboundEmailKeyPrefix: "outbound/",
   allowPlusSign: false,
+  abortSubject: /Delivery Status Notification \(Failure\)/i,
   forwardMapping: {
     "@forwarder.billhero.com.au": [
       // "richard+test-bh-inbound@foxworthy.name",
@@ -281,7 +282,12 @@ exports.processMessage = function(data) {
         if (process.env.DETECT_LOOP && subject.includes(data.config.subjectPrefix)) {
 
           // this will be picked up later
-          data.abortReason = `Possible email loop detected - incoming email Subject already contains '${data.config.subjectPrefix}'`;
+          data.abortReason = `Processing aborted: possible email loop detected - incoming email Subject already contains '${data.config.subjectPrefix}'`;
+          return;
+        }
+
+        if (data.config.abortSubject && subject.match(data.config.abortSubject)) {
+            data.abortReason = 'Processing aborted due to email subject';
           return;
         }
 
@@ -405,7 +411,7 @@ exports.sendMessage = async (data) => {
     slackMessage += `\n${data.extraInfo.join(', ')}`;
   }
 
-  slackMessage += `Original message: <s3://${data.config.emailBucket}/${data.config.inboundEmailKeyPrefix}${data.email.messageId}|${data.email.messageId}>`;
+  slackMessage += `\nOriginal message: <s3://${data.config.emailBucket}/${data.config.inboundEmailKeyPrefix}${data.email.messageId}|${data.email.messageId}>`;
 
   await Slack.sendMessage(slackMessage);
 
