@@ -100,7 +100,7 @@ exports.transformRecipients = async (data) => {
   for (var origEmail of data.recipients) {
     // Momentum (and possibly others) require an email prefix of 'subscriber+'.
     // We need to get rid of it.
-    origEmail.replace(/^subscriber\/+/i, ''); 
+    origEmail.replace(/^subscriber(\+|%2b)/mgi, ''); 
     var origEmailKey = origEmail.toLowerCase();
     if (data.config.allowPlusSign) {
       origEmailKey = origEmailKey.replace(/\+.*?@/, '@');
@@ -399,13 +399,15 @@ exports.sendMessage = async (data) => {
     )
   ).join(', ');
 
-  var logMessage = `Forwarding email from: ${data.fromAddress || '<not extracted>'}\nOriginal recipients: ${originalRecipients}\nNew recipients: ${newRecipients}`;
+  var slackMessage = `Forwarding email from: ${data.fromAddress || '<not extracted>'}\nOriginal recipients: ${originalRecipients}\nNew recipients: ${newRecipients}`;
 
   if (data.extraInfo) {
-    logMessage += `\n${data.extraInfo.join(', ')}`;
+    slackMessage += `\n${data.extraInfo.join(', ')}`;
   }
 
-  await Slack.sendMessage(logMessage);
+  slackMessage += `Original message: <s3://${data.config.emailBucket}/${data.config.inboundEmailKeyPrefix}${data.email.messageId}|${data.email.messageId}>`;
+
+  await Slack.sendMessage(slackMessage);
 
   return new Promise(function (resolve, reject) {
     data.ses.sendRawEmail(params, function (err, result) {
@@ -510,7 +512,8 @@ exports.handler = function(event, context, callback, overrides) {
   };
 
   if (process.env.LAMBDA_FLAGS_LOG_EMAIL == 'true') {
-    console.log(data.event.Records[0]);
+    console.log(data.event.Records[0].ses.receipt.recipients);
+    console.log(data.event.Records[0].ses.mail);
   }
 
   Promise.series(steps, data)
