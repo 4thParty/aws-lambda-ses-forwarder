@@ -46,7 +46,7 @@ var defaultConfig = {
   fromEmail: "outbound@forwarder.billhero.com.au",
   subjectPrefix: "[Forwarded via Bill Hero] - ",
   emailBucket: "billhero-email",
-  inboundEmailKeyPrefix: "inbound/",
+  inboundEmailKeyPrefix: process.env.inboundEmailKeyPrefix || "inbound/",
   outboundEmailKeyPrefix: "outbound/",
   allowPlusSign: false,
   abortSubject: /Delivery Status Notification \(Failure\)/i,
@@ -54,11 +54,12 @@ var defaultConfig = {
     "@forwarder.billhero.com.au": [
       // "richard+test-bh-inbound@foxworthy.name",
     ],
+    "@test.billhero.com.au": []
   }
 };
 
 /**
- * Parses the SES event record provided for the `mail` and `receipients` data.
+ * Parses the SES event record provided for the `mail` and `recipients` data.
  *
  * @param {object} data - Data bundle with context, email, etc.
  *
@@ -232,11 +233,25 @@ exports.fetchMessage = function(data) {
 exports.processMessage = function(data) {
   if (data.abortReason) return Promise.resolve(data);
 
-  var match = data.emailData.match(/^((?:.+\r?\n)*)(\r?\n(?:.*\s+)*)/m);
-  var header = match && match[1] ? match[1] : data.emailData;
-  var body = match && match[2] ? match[2] : '';
+  var header = '';
 
-  // Add "Reply-To:" with the "From" address if it doesn't already exists
+  // we do our own initial header filtering
+  var removedHeaders = [];
+
+  data.event.Records[0].ses.mail.headers.forEach(h => {
+    if (!/^(dkim|arc|x|authentication|received)-/i.test(h.name)) {
+        header += `${h.name}: ${h.value}\r\n`;
+    } else {
+      removedHeaders.push(h);
+    }
+  });
+
+  data.log('Removed headers: ' + JSON.stringify(removedHeaders))
+
+  var match = data.emailData.match(/^(?:(?:.+\r?\n)*)(?<body>\r?\n(?:.*\s+)*)/m);
+  var body = (match && match.groups.body) || '';
+
+  // Add "Reply-To:" with the "From" address if it doesn't already exist
   if (!/^reply-to:[\t ]?/mi.test(header)) {
     match = header.match(/^from:[\t ]?(.*(?:\r?\n\s+.*)*\r?\n)/mi);
     var from = match && match[1] ? match[1] : '';
@@ -287,7 +302,7 @@ exports.processMessage = function(data) {
         }
 
         if (data.config.abortSubject && subject.match(data.config.abortSubject)) {
-            data.abortReason = 'Processing aborted due to email subject';
+            data.abortReason = `Processing aborted: email subject '${subject}'`;
             return;
         }
 
@@ -716,19 +731,12 @@ if (!isHostedOnAWS) {
   // exports.processMessage(event);
   // exports.handler(event, {}, callback, null);
 
-  var header1 = "hello\nworld";
-  var header2 = "hello\nworld\n";
-
-  header2 = header2.appendMailHeader('Bcc', process.env.BILLHERO_BCC);
-
-  var res1 = header1.appendMailHeader('name', 'val');
-  var res2 = header2.appendMailHeader('name', 'val');
-
   var r1 = "subscriber+hello@gmail.com".replace(/subscriber(\+|%2b)/mgi, '');
   var r2 = "subscriber%2bhello@gmail.com".replace(/subscriber(\+|%2b)/mgi, '');
   
   var fs = require("fs");
 
+  /*
   var subject = 'hello Delivery Status Notification (Failure) world';
   var r = subject.match(defaultConfig.abortSubject);
   subject = 'Delivery Status Notification (Failure)';
@@ -738,9 +746,11 @@ if (!isHostedOnAWS) {
     console.log('Processing aborted due to email subject');
     return;
 }
+*/
+debugger;
 
-var raw = fs.readFileSync("example/u3tfss2q42tevbb0dkhar0joeqbtst54na21ea81").toString();
-  var parsed = fs.readFileSync("example/u3tfss2q42tevbb0dkhar0joeqbtst54na21ea81.txt").toString();
+var raw =    fs.readFileSync("example/u3tfss2q42tevbb0dkhar0joeqbtst54na21ea81").toString();
+var parsed = fs.readFileSync("example/u3tfss2q42tevbb0dkhar0joeqbtst54na21ea81.txt").toString();
 
   var n;
   var v = 'hello' + (n || '');
@@ -752,7 +762,7 @@ var raw = fs.readFileSync("example/u3tfss2q42tevbb0dkhar0joeqbtst54na21ea81").to
   console.dir(data);
   console.log(data);
   data.recipients = data.event.Records[0].ses.receipt.recipients
-  // exports.processMessage(data).then((blah) => console.log(blah) )
+  exports.processMessage(data).then((blah) => console.log(blah) )
   exports.transformRecipients(data).then((blah) => console.log(blah) )
 
 
