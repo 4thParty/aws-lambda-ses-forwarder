@@ -239,7 +239,7 @@ exports.processMessage = function(data) {
   var removedHeaders = [];
 
   data.event.Records[0].ses.mail.headers.forEach(h => {
-    if (!/^(dkim|arc|x|authentication|received)-/i.test(h.name)) {
+    if (!/^((dkim|arc|x|authentication)-|received)/i.test(h.name)) {
         header += `${h.name}: ${h.value}\r\n`;
     } else {
       removedHeaders.push(h);
